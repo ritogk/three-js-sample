@@ -16,7 +16,7 @@ const camera = new THREE.PerspectiveCamera(
 );
 camera.position.set(5, 3, 5);
 
-const geometry = new THREE.BoxGeometry();
+const geometry = new THREE.BoxGeometry(2, 2, 2);
 const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
 const cube = new THREE.Mesh(geometry, material);
 scene.add(cube);
@@ -100,6 +100,7 @@ spheres.forEach((s) => {
 
 let placedCount = 0;
 let line: THREE.Line | null = null;
+let labelSprite: THREE.Sprite | null = null;
 
 window.addEventListener("click", (event) => {
   if (placedCount >= 2) return;
@@ -121,6 +122,64 @@ window.addEventListener("click", (event) => {
         new THREE.LineBasicMaterial({ color: 0xffff00 })
       );
       scene.add(line);
+    }
+    if (placedCount === 2) {
+      const points = [spheres[0].position.clone(), spheres[1].position.clone()];
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      line = new THREE.Line(
+        geometry,
+        new THREE.LineBasicMaterial({ color: 0xffff00 })
+      );
+      scene.add(line);
+
+      // ラベルSprite生成
+      const canvasLabel = document.createElement("canvas");
+      canvasLabel.width = 128;
+      canvasLabel.height = 128;
+      const ctx = canvasLabel.getContext("2d")!;
+      // 角丸長方形描画
+      const radius = 24;
+      ctx.beginPath();
+      ctx.moveTo(radius, 0);
+      ctx.lineTo(canvasLabel.width - radius, 0);
+      ctx.arcTo(canvasLabel.width, 0, canvasLabel.width, radius, radius);
+      ctx.lineTo(canvasLabel.width, canvasLabel.height - radius);
+      ctx.arcTo(
+        canvasLabel.width,
+        canvasLabel.height,
+        canvasLabel.width - radius,
+        canvasLabel.height,
+        radius
+      );
+      ctx.lineTo(radius, canvasLabel.height);
+      ctx.arcTo(0, canvasLabel.height, 0, canvasLabel.height - radius, radius);
+      ctx.lineTo(0, radius);
+      ctx.arcTo(0, 0, radius, 0, radius);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.fill();
+
+      ctx.font = "bold 64px sans-serif";
+      ctx.fillStyle = "#222";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("1m", canvasLabel.width / 2, canvasLabel.height / 2);
+      const texture = new THREE.CanvasTexture(canvasLabel);
+      const spriteMaterial = new THREE.SpriteMaterial({
+        map: texture,
+        depthTest: false,
+        depthWrite: false,
+      });
+      labelSprite = new THREE.Sprite(spriteMaterial);
+      //   labelSprite.scale.set(1, 0.4, 1);
+      labelSprite.scale.set(1, 1, 1);
+      labelSprite.renderOrder = 9999;
+      scene.add(labelSprite);
+      // 初期位置
+      const mid = new THREE.Vector3()
+        .addVectors(spheres[0].position, spheres[1].position)
+        .multiplyScalar(0.5);
+      labelSprite.position.copy(mid);
     }
   }
 });
@@ -150,11 +209,22 @@ canvas.addEventListener("mousemove", (event) => {
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
+  // ラベルも中点に移動
+  if (labelSprite) {
+    const mid = new THREE.Vector3()
+      .addVectors(spheres[0].position, spheres[1].position)
+      .multiplyScalar(0.5);
+    labelSprite.position.copy(mid);
+  }
   // sphereの新しい位置を取得（XZ平面上に制限）
   const plane = new THREE.Plane(
     new THREE.Vector3(0, 1, 0),
     -spheres[draggingIndex].position.y
   );
+  // ラベルをカメラ目線に
+  if (labelSprite) {
+    labelSprite.quaternion.copy(camera.quaternion);
+  }
   const intersection = new THREE.Vector3();
   raycaster.ray.intersectPlane(plane, intersection);
   if (intersection) {
